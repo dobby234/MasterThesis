@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bivariate Grid Overlay for two uncertainty dimensions</title></head>
+<body><main>
+<h1>Bivariate Grid Overlay for two uncertainty dimensions</h1>
+<p class="sub">Synthetic FIRMS-like fire detections</p>
+<section class="ctl">
+<label>Scenario<select id="sc">
+<option value="rep">1 Representative</option><option value="structural">2 Structural differences only</option>
+<option value="distributional">3 Distributional differences only</option><option value="combined">4 Combined differences</option></select></label>
+<label class="stage">Sampling stage: <span id="stl"></span><span class="row"><button id="play" type="button">Play</button><input id="st" type="range" min="0" max="9" value="3" aria-label="Sampling stage"></span></label>
+<div class="layers" role="group" aria-label="Layers"><span class="lbl">Layers</span><button id="tg-smp" class="tog" type="button">Sample points</button><button id="tg-ref" class="tog" type="button">Reference points</button><button id="tg-grid" class="tog" type="button">Uncertainty overlay</button></div>
+<label class="chk"><input id="spot" type="checkbox" checked> Spotlight</label>
+<label class="chk"><input id="fit" type="checkbox" checked> Lens scales with grid</label>
+</section>
+<p id="desc" class="mut"></p>
+<section class="card">
+<div id="wrap"><div id="map"></div><canvas id="ov"></canvas><div id="gfx"></div></div>
+<div class="leg"><div id="legOv" class="legov"><div class="biv"><div class="yax">Distributional uncertainty (JSD): low → high</div><div class="lg" id="lg"></div><div></div><div class="xax">Structural uncertainty: under → over</div></div><div id="lgt"></div></div>
+<div>Lens bars: FRP of the sample points in the cell, % by class <span class="key" style="background:hsl(50,90%,52%)"></span>low (&lt; 10 MW) <span class="key" style="background:hsl(28,90%,52%)"></span>medium (10–40) <span class="key" style="background:hsl(5,85%,48%)"></span>high (&gt; 40)</div></div>
+<p id="sum" class="cap"></p>
+<p class="cap">Drag the hexagonal lens to another cell (or click a cell): it snaps to the cell, which is spotlighted. The lower band shows the FRP distribution of the sample points in that cell as % of its points, in the classes Low, Medium and High. Click a band to cycle the lens size (1×, 1.5×, 0.75×); with “Lens scales with grid” on it follows the grid cells as you zoom. Use the layer buttons to show or hide sample points, reference points and the uncertainty overlay.</p>
+</section>
+</main><script type="module" src="/src/main.ts"></script></body></html>
