@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map+Plot Coordinated view</title>
+<!-- Needs internet access: Leaflet from cdnjs, light basemap tiles from Esri. Open this file directly in a browser. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{--bg:#f6f6f3;--ink:#1d2421;--mut:#66706a;--line:#d6d8d2;--sel:#e8590c}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);height:100vh}
+#left{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line)}
+#top{flex:none;padding:10px 16px 8px;border-bottom:1px solid var(--line);background:#fbfbf9}
+h1{font:600 19px/1.2 Georgia,serif;margin:0 0 8px}
+#bar{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:center}
+.grp{display:flex;align-items:center;gap:6px}
+.grp>b{font-weight:600;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+button,select{font:inherit;color:var(--ink);background:#fff;border:1px solid #bfc3bb;border-radius:4px;padding:3px 9px;cursor:pointer}
+button:hover{background:#f0f1ed}button:disabled{opacity:.45;cursor:default}
+button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #2f6fc4;outline-offset:2px}
+input[type=range]{width:150px;accent-color:#c4501b}
+#stl{font-variant-numeric:tabular-nums;white-space:nowrap}
+#mapPanel{position:relative;flex:1;min-height:0}
+#wrap{position:absolute;inset:0}
+#map{position:absolute;inset:0;background:#e8eef2}
+#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:500}
+.maplegend{position:absolute;left:10px;bottom:10px;z-index:600;pointer-events:none;background:rgba(255,255,255,.92);border:1px solid var(--line);padding:6px 9px;font-size:11px;color:var(--mut)}
+.maplegend .t{font-weight:600;color:var(--ink);margin-bottom:2px}
+.maplegend .pt{display:flex;gap:10px}.maplegend .pt span,.maplegend .row2 span{display:inline-flex;align-items:center;gap:4px}
+.dot{width:10px;height:10px;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 .5px #888;display:inline-block}
+.selchip{display:inline-block;width:11px;height:11px;border:3px solid var(--sel)}
+#right{display:grid;grid-template-rows:1fr 1fr;min-width:0;min-height:0}
+.rp{display:flex;flex-direction:column;min-height:0;padding:8px 14px 8px}
+#scPanel{border-bottom:1px solid var(--line)}
+.ph{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex:none}
+h2{font:600 13px/1.3 system-ui,sans-serif;margin:0}
+.ph .note{margin-left:auto}
+.note{font-size:12px;color:var(--mut)}
+#spBox,#hiBox{position:relative;flex:1;min-height:0;overflow:hidden}
+#sp{position:absolute;inset:0;background:#fff;border:1px solid var(--line)}
+#sp text,#hist text{font:11px system-ui,sans-serif;fill:#44504a}
+#sp .ax{stroke:#8a928c}#sp .gr{stroke:#ecece6}#sp .zero{stroke:#44504a;stroke-width:1.2}
+#sp circle.d{stroke:#fff;stroke-width:1;cursor:pointer;fill:#1d2421}
+#hist{display:block}
+#tip{position:fixed;z-index:3000;pointer-events:none;background:#1d2421;color:#fff;padding:5px 8px;border-radius:3px;font-size:12px;display:none;max-width:280px}
+@media (max-width:900px){body{overflow:auto}#app{grid-template-columns:1fr;height:auto}#mapPanel{height:60vh;flex:none}#right{grid-template-rows:auto;height:auto}.rp{height:360px}}
+</style></head>
+<body>
+<div id="app">
+<section id="left">
+<header id="top">
+<h1>Map+Plot Coordinated view</h1>
+<div id="bar" aria-label="Controls">
+<div class="grp"><b>Sampling stage</b>
+<button id="prev" type="button" aria-label="Previous stage">◀ Prev</button>
+<input id="st" type="range" min="1" max="5" value="3" aria-label="Sampling stage">
+<button id="next" type="button" aria-label="Next stage">Next ▶</button>
+<button id="play" type="button">Play</button>
+<span id="stl"></span></div>
+<div class="grp"><b>Map layers</b>
+<button id="tg-grid" type="button" aria-pressed="true">Grid</button>
+<button id="tg-pts" type="button" aria-pressed="true">Sample points</button></div>
+<div class="grp"><b>Scenario</b>
+<select id="cfg-sc" aria-label="Scenario"><option value="combined">Combined differences</option><option value="rep">Representative</option><option value="structural">Structural differences only</option><option value="distributional">Distributional differences only</option></select></div>
+</div>
+</header>
+<div id="mapPanel"><div id="wrap"><div id="map"></div><canvas id="ov"></canvas></div>
+<div class="maplegend"><div class="t">Sampled fire detections (FRP)</div><div class="pt" id="legPts"></div>
+<div class="row2" style="margin-top:4px"><span><i class="selchip"></i>selected cell</span> <span style="margin-left:8px"><i class="selchip" style="border-color:#1d2421;border-width:2px"></i>hovered cell</span></div></div>
+</div>
+</section>
+<section id="right">
+<div class="rp" id="scPanel"><div class="ph"><h2>Scatterplot: one point per grid cell</h2><span class="note" id="spcount"></span><button id="reset" type="button">Reset selection</button></div>
+<div id="spBox"><svg id="sp" role="img" aria-label="Structural uncertainty against distributional uncertainty for each grid cell"></svg></div></div>
+<div class="rp" id="hiPanel"><div class="ph"><h2 id="hiTitle">Sampled FRP distribution</h2></div><div id="hiBox"></div></div>
+</section>
+</div>
+<div id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+// ==== DATA START (same synthetic reference data and sampling scenarios as the earlier prototypes)
+const K=10,B=12,MINN=5,N=5000,FR=[.02,.04,.07,.11,.16,.22,.3,.4,.52,.65];
+const CELL=400000,X0=-13950000,YT=6400000,GX=17,GY=9,NC=GX*GY,RE=6378137,D2R=Math.PI/180;
+const merc=(lng,lat)=>({x:RE*lng*D2R,y:RE*Math.log(Math.tan(Math.PI/4+lat*D2R/2))});
+const unmerc=(x,y)=>({lng:x/RE/D2R,lat:(2*Math.atan(Math.exp(y/RE))-Math.PI/2)/D2R});
+const cellAt=(lat,lng)=>{const m=merc(lng,lat),c=Math.floor((m.x-X0)/CELL),r=Math.floor((YT-m.y)/CELL);return c<0||r<0||c>=GX||r>=GY?-1:r*GX+c};
+const OUT=[[-124.7,48.4],[-124.1,46.2],[-124.5,42.8],[-124.4,40.4],[-122.5,37.8],[-121.9,36.6],[-120.6,34.5],[-118.5,34],[-117.1,32.5],[-114.7,32.7],[-111,31.3],[-108.2,31.3],[-106.5,31.8],[-104.5,29.6],[-103,29],[-101.4,29.8],[-99.5,27.5],[-97.4,25.9],[-97.2,27.8],[-94.7,29.3],[-93.8,29.7],[-91,29.2],[-89.4,29],[-89.2,30.2],[-87.5,30.3],[-85.3,29.7],[-84,30],[-82.8,28.9],[-82.6,27.5],[-81.8,26.1],[-81,25.1],[-80.4,25.3],[-80.1,26.8],[-80.6,28.4],[-81.4,30.6],[-81,32],[-79,33.6],[-77.9,34],[-76.5,34.7],[-75.5,35.3],[-76,36.9],[-75.1,38.4],[-74,39.5],[-74,40.5],[-72,41],[-70,41.7],[-70.7,42.7],[-70.2,43.7],[-68.5,44.3],[-67,44.8],[-67.8,47.1],[-69.2,47.4],[-70.8,45.3],[-74.8,45],[-79,43.3],[-83,42],[-82.4,45.3],[-84.7,46.5],[-89.5,48],[-95.2,49],[-123,49],[-122.8,48.3],[-124.7,48.4]];
+function inUS(lo,la){let c=false;for(let i=0,j=OUT.length-1;i<OUT.length;j=i++){const a=OUT[i],b=OUT[j];if((a[1]>la)!=(b[1]>la)&&lo<(b[0]-a[0])*(la-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const R=rng(42),gs=()=>Math.sqrt(-2*Math.log(R()+1e-12))*Math.cos(6.2832*R());
+const CL=[[-121.8,40.3,1.3,3.3,.16],[-117.3,34.1,1,3,.1],[-114.5,45.5,1.8,2.7,.12],[-106.5,39.5,1.6,2.6,.08],[-110.5,34.2,1.6,2.9,.1],[-98,31.3,1.8,2.5,.12],[-96.5,37.5,1.5,2.3,.1],[-83.5,32.5,1.8,2.4,.1],[-81.5,28.5,1,2.2,.06],[0,0,0,2.2,.08]];
+const P=[];
+while(P.length<N){let r=R(),c=0;while(c<9&&r>CL[c][4]){r-=CL[c][4];c++}
+ const q=CL[c];let lo,la;
+ if(c==9){lo=-125+R()*58;la=25+R()*24}else{lo=q[0]+q[2]*gs();la=q[1]+q[2]*.8*gs()}
+ if(!inUS(lo,la))continue;const m=merc(lo,la),cx=Math.floor((m.x-X0)/CELL),cy=Math.floor((YT-m.y)/CELL);
+ if(cx<0||cy<0||cx>=GX||cy>=GY)continue;const lf=q[3]+.65*gs();
+ P.push({lat:la,lng:lo,lf,c:cx,r:cy,cell:cy*GX+cx,b:Math.max(0,Math.min(B-1,Math.floor((lf-.5)/5.5*B)))})}
+const refN=new Int32Array(NC),refH=Array.from({length:NC},()=>new Float64Array(B));
+P.forEach(p=>{refN[p.cell]++;refH[p.cell][p.b]++});refH.forEach((h,i)=>{if(refN[i])for(let b=0;b<B;b++)h[b]/=refN[i]});
+const Q=rng(7),U=P.map(()=>Q());
+function makeOrder(sc){
+ const s=sc=='structural'||sc=='combined',d=sc=='distributional'||sc=='combined';
+ const wc=p=>s?.25+2.75*(1-p.c/(GX-1)):1,wf=p=>d&&p.r<GY/2?Math.exp(-1.2*Math.max(-2,Math.min(3,p.lf-2.5))):1;
+ const key=P.map((p,i)=>-Math.log(U[i])/wf(p)/wc(p)),idx=P.map((_,i)=>i);
+ if(s)return idx.sort((a,b)=>key[a]-key[b]);
+ const gr=Array.from({length:NC},()=>[]);idx.forEach(i=>gr[P[i].cell].push(i));const f=new Float64Array(N);
+ gr.forEach(a=>{a.sort((i,j)=>key[i]-key[j]);a.forEach((i,k)=>f[i]=(k+.5)/a.length+1e-6*U[i])});
+ return idx.sort((a,b)=>f[a]-f[b])}
+function jsd(p,q){let s=0;for(let i=0;i<B;i++){const a=p[i],b=q[i],m=(a+b)/2;if(a>0)s+=a*Math.log2(a/m)/2;if(b>0)s+=b*Math.log2(b/m)/2}return s}
+const cache={};
+function data(sc){if(cache[sc])return cache[sc];
+ const ord=makeOrder(sc),cnt=new Int32Array(NC),h=new Int32Array(NC*B),M=[];let pos=0;
+ for(let k=0;k<K;k++){const ns=Math.round(N*FR[k]);
+  while(pos<ns){const p=P[ord[pos++]];cnt[p.cell]++;h[p.cell*B+p.b]++}
+  const n=cnt.slice(),hh=h.slice(),st=[],js=[];
+  for(let c=0;c<NC;c++){if(!refN[c]){st.push(null);js.push(null);continue}
+   st.push(n[c]?Math.max(-1,Math.min(1,Math.log2((n[c]/ns)/(refN[c]/N))/2)):-1);
+   if(n[c]>=MINN){const q=[];for(let b=0;b<B;b++)q.push(hh[c*B+b]/n[c]);js.push(jsd(refH[c],q))}else js.push(null)}
+  M.push({ns,n,hh,st,js})}
+ return cache[sc]={ord,M}}
+// ==== DATA END
+
+// ---- configuration
+const CONFIG={
+  stageIndex:[1,3,5,7,9],     // the five predefined cumulative stages (indices into the 10 generated stages)
+  scenario:'combined'
+};
+let k=2,sel=-1,hov=-1,timer=null,xs=[],ys=[];
+const layers={grid:true,pts:true};
+const stageAt=i=>data(CONFIG.scenario).M[CONFIG.stageIndex[i]];
+const stageData=()=>({D:data(CONFIG.scenario),S:stageAt(k)});
+const cid=c=>`R${Math.floor(c/GX)+1}-C${c%GX+1}`;
+const FRPC=[['low','< 10 MW','hsl(50,92%,52%)'],['medium','10–40 MW','hsl(27,92%,52%)'],['high','> 40 MW','hsl(3,80%,45%)']];
+const ptClass=b=>b<4?0:b<7?1:2;
+const fmtS=v=>(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(2);
+const val=(i,c)=>{const m=stageAt(i),s=m.st[c],j=m.js[c];return s==null||j==null?null:{s,j,n:m.n[c]}};
+
+// ---- map (same basemap and extent as the earlier Leaflet prototype)
+const map=L.map('map',{zoomSnap:.25,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false,minZoom:2,maxZoom:12});
+const TILE_URL='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+L.tileLayer(TILE_URL,{attribution:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',maxZoom:16}).addTo(map);
+map.setView([37.5,-96],4);
+const cp=(X,Y)=>{const u=unmerc(X,Y);return map.latLngToContainerPoint([u.lat,u.lng])};
+function draw(){
+ const cv=$('ov'),mp=$('map'),d=devicePixelRatio||1,w=mp.clientWidth,h=mp.clientHeight;
+ cv.width=w*d;cv.height=h*d;const x=cv.getContext('2d');x.setTransform(d,0,0,d,0,0);
+ const{D,S}=stageData(),z=map.getZoom(),o=map.getPixelBounds().min;
+ xs=[];ys=[];for(let i=0;i<=GX;i++)xs.push(cp(X0+i*CELL,YT).x);for(let j=0;j<=GY;j++)ys.push(cp(X0,YT-j*CELL).y);
+ if(layers.grid){x.strokeStyle='rgba(100,116,139,.45)';x.lineWidth=1;x.beginPath();
+  for(let i=0;i<=GX;i++){x.moveTo(xs[i],ys[0]);x.lineTo(xs[i],ys[GY])}for(let j=0;j<=GY;j++){x.moveTo(xs[0],ys[j]);x.lineTo(xs[GX],ys[j])}x.stroke()}
+ if(layers.pts){const rr=2.4+Math.min(Math.max(z-3,0),4)*.4;
+  for(let i=0;i<S.ns;i++){const p=P[D.ord[i]],q=map.project([p.lat,p.lng],z);x.fillStyle=FRPC[ptClass(p.b)][2];x.strokeStyle='rgba(255,255,255,.85)';x.lineWidth=.8;
+   x.beginPath();x.arc(q.x-o.x,q.y-o.y,rr,0,7);x.fill();x.stroke()}}
+ const box=(c,col,wd,fill)=>{const i=c%GX,j=Math.floor(c/GX);
+  if(fill){x.fillStyle=fill;x.fillRect(xs[i],ys[j],xs[i+1]-xs[i],ys[j+1]-ys[j])}
+  for(const[s,l]of[['rgba(255,255,255,.95)',wd+2.5],[col,wd]]){x.strokeStyle=s;x.lineWidth=l;x.strokeRect(xs[i],ys[j],xs[i+1]-xs[i],ys[j+1]-ys[j])}};
+ if(hov>=0&&hov!==sel&&refN[hov])box(hov,'#1d2421',1.8);
+ if(sel>=0)box(sel,'#e8590c',3,'rgba(232,89,12,.08)')}
+
+// ---- scatterplot (SVG in pixel units of its panel, one circle per grid cell with reference data)
+let SW=520,SH=300;const ML=50,MR=14,MT=10,MB=42,YMAX=.5;
+const sx=v=>ML+(v+1)/2*(SW-ML-MR),sy=v=>SH-MB-Math.min(1,v/YMAX)*(SH-MT-MB);
+const NS='http://www.w3.org/2000/svg',dots=[];
+const E=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const q in a)e.setAttribute(q,a[q]);p&&p.appendChild(e);return e};
+let ringS,ringH;
+function buildScatter(){
+ const box=$('spBox'),sp=$('sp');SW=Math.max(260,box.clientWidth);SH=Math.max(170,box.clientHeight);
+ sp.setAttribute('width',SW);sp.setAttribute('height',SH);sp.setAttribute('viewBox',`0 0 ${SW} ${SH}`);sp.innerHTML='';
+ [-1,-.5,0,.5,1].forEach(v=>{E('line',{x1:sx(v),x2:sx(v),y1:MT,y2:SH-MB,class:'gr'},sp);E('text',{x:sx(v),y:SH-MB+14,'text-anchor':'middle'},sp).textContent=v>0?'+'+v:v<0?'−'+Math.abs(v):'0'});
+ [0,.1,.2,.3,.4,.5].forEach(v=>{E('line',{x1:ML,x2:SW-MR,y1:sy(v),y2:sy(v),class:'gr'},sp);E('text',{x:ML-6,y:sy(v)+4,'text-anchor':'end'},sp).textContent=v.toFixed(1)});
+ E('line',{x1:sx(0),x2:sx(0),y1:MT,y2:SH-MB,class:'zero'},sp);
+ E('text',{x:sx(0)+4,y:MT+10},sp).textContent='0 = proportional share';
+ E('line',{x1:ML,x2:SW-MR,y1:SH-MB,y2:SH-MB,class:'ax'},sp);E('line',{x1:ML,x2:ML,y1:MT,y2:SH-MB,class:'ax'},sp);
+ E('text',{x:(ML+SW-MR)/2,y:SH-6,'text-anchor':'middle',style:'font-weight:600'},sp).textContent='Structural Uncertainty';
+ if(SW>=420){E('text',{x:ML,y:SH-6,style:'font-size:10px;fill:#66706a'},sp).textContent='← under-represented';E('text',{x:SW-MR,y:SH-6,'text-anchor':'end',style:'font-size:10px;fill:#66706a'},sp).textContent='over-represented →'}
+ E('text',{transform:`translate(12 ${(MT+SH-MB)/2}) rotate(-90)`,'text-anchor':'middle',style:'font-weight:600'},sp).textContent='Distributional Uncertainty';
+ dots.length=0;
+ for(let c=0;c<NC;c++){if(!refN[c])continue;
+  const e=E('circle',{r:5,class:'d',tabindex:0,role:'button','aria-label':`Grid cell ${cid(c)}`},sp);dots[c]=e;
+  e.onmouseenter=ev=>{hov=c;linkRefresh();tip(ev,tipText(c))};e.onmousemove=ev=>tip(ev,tipText(c));
+  e.onmouseleave=()=>{hov=-1;linkRefresh();tip()};e.onclick=()=>select(c);e.onfocus=()=>{hov=c;linkRefresh()};e.onblur=()=>{hov=-1;linkRefresh()};
+  e.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();select(c)}}}
+ ringH=E('circle',{r:8.5,fill:'none',stroke:'#1d2421','stroke-width':2,'pointer-events':'none'},sp);
+ ringS=E('circle',{r:9.5,fill:'none',stroke:'#e8590c','stroke-width':3,'pointer-events':'none'},sp)}
+function updateScatter(){
+ let shown=0,hidden=0;
+ for(let c=0;c<NC;c++){const e=dots[c];if(!e)continue;const cur=val(k,c);
+  if(!cur){e.style.display='none';hidden++}else{shown++;e.style.display='';e.setAttribute('cx',sx(cur.s));e.setAttribute('cy',sy(cur.j))}}
+ $('spcount').textContent=`${shown} cells scored (cells with fewer than ${MINN} sampled points are not shown)`;
+ styleDots()}
+function styleDots(){
+ const pos=(r,c)=>{const e=c>=0?dots[c]:null;if(!e||e.style.display==='none'){r.style.display='none';return}r.style.display='';r.setAttribute('cx',e.getAttribute('cx'));r.setAttribute('cy',e.getAttribute('cy'))};
+ pos(ringS,sel);pos(ringH,hov===sel?-1:hov)}
+function tipText(c){const v=val(k,c);return v?`<b>${cid(c)}</b><br>Structural uncertainty: ${fmtS(v.s)}<br>Distributional uncertainty: ${v.j.toFixed(3)}`:`<b>${cid(c)}</b><br>not scored (fewer than ${MINN} sampled observations)`}
+function tip(ev,t){const el=$('tip');if(!ev){el.style.display='none';return}if(t)el.innerHTML=t;el.style.display='block';el.style.left=ev.clientX+14+'px';el.style.top=ev.clientY+14+'px'}
+
+// ---- histogram of the sampled FRP values in the selected cell (sampled observations only)
+function renderHist(){
+ const box=$('hiBox');$('hiTitle').textContent='Sampled FRP distribution'+(sel>=0?' · '+cid(sel):'');
+ if(sel<0){box.innerHTML='<p class="note">Select a grid cell on the map or a point in the scatterplot.</p>';return}
+ const S=stageAt(k),n=S.n[sel];
+ if(!n){box.innerHTML='<p class="note">No sampled observations in this cell at this stage.</p>';return}
+ const W=Math.max(240,box.clientWidth),H=Math.max(110,box.clientHeight),l=34,r=10,t=16,bt=42,cnt=[...S.hh.slice(sel*B,sel*B+B)],mx=Math.max(...cnt),bw=(W-l-r)/B;
+ let svg=`<svg id="hist" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Histogram of sampled FRP values in the selected cell">`;
+ cnt.forEach((v,i)=>{const hh=v/mx*(H-t-bt);svg+=`<rect x="${l+i*bw+1}" y="${H-bt-hh}" width="${bw-2}" height="${hh}" fill="${FRPC[ptClass(i)][2]}"/>`;if(v)svg+=`<text x="${l+i*bw+bw/2}" y="${H-bt-hh-3}" text-anchor="middle">${v}</text>`});
+ svg+=`<line x1="${l}" x2="${W-r}" y1="${H-bt}" y2="${H-bt}" stroke="#8a928c"/><line x1="${l}" x2="${l}" y1="${t}" y2="${H-bt}" stroke="#8a928c"/><text x="${l-5}" y="${t+8}" text-anchor="end">${mx}</text><text x="${l-5}" y="${H-bt}" text-anchor="end">0</text>`;
+ [[0,'1.6'],[4,'10'],[7,'41'],[12,'400']].forEach(([i,t2])=>{svg+=`<line x1="${l+i*bw}" x2="${l+i*bw}" y1="${H-bt}" y2="${H-bt+4}" stroke="#8a928c"/><text x="${Math.min(W-r-8,l+i*bw)}" y="${H-bt+16}" text-anchor="middle">${t2}</text>`});
+ svg+=`<text x="${(l+W-r)/2}" y="${H-6}" text-anchor="middle">FRP of sampled observations (MW, log scale)</text></svg>`;
+ box.innerHTML=svg}
+
+// ---- linking, selection and refresh
+function linkRefresh(){draw();styleDots()}
+function select(c){sel=c;draw();styleDots();renderHist()}
+function clearSel(){sel=-1;hov=-1;draw();styleDots();renderHist()}
+function refresh(){
+ const S=stageAt(k);
+ $('st').value=k+1;$('stl').textContent=`Stage ${k+1} of 5 · ${S.ns.toLocaleString('en-US')} sampled observations`;
+ $('prev').disabled=k===0;$('next').disabled=k===4;
+ updateScatter();draw();renderHist()}
+map.on('move zoom resize',draw);
+map.on('click',e=>{const c=cellAt(e.latlng.lat,e.latlng.lng);if(c>=0&&refN[c])select(c)});
+map.on('mousemove',e=>{const c=cellAt(e.latlng.lat,e.latlng.lng),v=c>=0&&refN[c]?c:-1;if(v!==hov){hov=v;linkRefresh()}tip()   /* no value labels on map hover; they appear only on the scatterplot */});
+map.on('mouseout',()=>{hov=-1;linkRefresh();tip()});
+
+// ---- controls
+const go=i=>{k=Math.max(0,Math.min(4,i));refresh()};
+$('prev').onclick=()=>go(k-1);$('next').onclick=()=>go(k+1);$('st').oninput=e=>go(+e.target.value-1);
+$('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;$('play').textContent='Play';return}
+ $('play').textContent='Pause';if(k>=4)go(0);
+ timer=setInterval(()=>{if(k>=4){clearInterval(timer);timer=null;$('play').textContent='Play';return}go(k+1)},1600)};
+function bindLayer(id,key){const b=$(id);b.onclick=()=>{layers[key]=!layers[key];b.setAttribute('aria-pressed',layers[key]);draw()}}
+bindLayer('tg-grid','grid');bindLayer('tg-pts','pts');
+$('cfg-sc').onchange=e=>{CONFIG.scenario=e.target.value;refresh()};
+$('reset').onclick=clearSel;
+addEventListener('keydown',e=>{if(e.key==='Escape')clearSel()});
+$('legPts').innerHTML=FRPC.map(c=>`<span><i class="dot" style="background:${c[2]}"></i>${c[0]} (${c[1]})</span>`).join('');
+// keep the map, scatterplot and histogram filling their panels
+new ResizeObserver(()=>{map.invalidateSize();draw()}).observe($('mapPanel'));
+new ResizeObserver(()=>{buildScatter();updateScatter()}).observe($('spBox'));
+new ResizeObserver(()=>renderHist()).observe($('hiBox'));
+requestAnimationFrame(()=>{map.invalidateSize();map.fitBounds([[24.5,-125],[49.5,-66.5]]);draw()});
+buildScatter();refresh();
+</script></body></html>
